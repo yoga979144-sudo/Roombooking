@@ -21,3 +21,13 @@ def test_double_booking_fails(client):
     # Try booking an overlapping slot
     rv = client.post('/book', json=payload)
     assert rv.status_code == 409
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    # This ensures we use a fresh in-memory database for every test run
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    with app.test_client() as client:
+        with app.app_context():
+            db.drop_all()  # Add this to clear existing data
+            db.create_all()
+        yield client
