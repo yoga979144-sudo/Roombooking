@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     environment {
+        // Change this to your actual Docker Hub username
         DOCKER_IMAGE = "23mis0383/booking-app"
         DOCKER_TAG = "${env.BUILD_ID}"
     }
@@ -9,22 +10,23 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/yoga979144-sudo/Roombooking.git'
+                // Clones your code from GitHub
+                git branch: 'main', url: 'https://github.com'
             }
         }
 
         stage('Unit Tests') {
             steps {
-                // Use 'bat' instead of 'sh' for Windows
-                bat 'pip install -r requirements.txt'
-                bat 'pytest'
+                // Fixes the Werkzeug/Flask version mismatch and runs tests
+                bat 'python -m pip install --upgrade flask werkzeug flask-sqlalchemy pytest'
+                bat 'python -m pytest'
             }
         }
 
         stage('Build & Push Docker') {
             steps {
                 script {
-                    // This requires the Docker Pipeline plugin installed in Jenkins
+                    // Requires 'Docker Pipeline' plugin and 'dockerhub-creds' in Jenkins
                     docker.withRegistry('', 'dockerhub-creds') {
                         def appImage = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
                         appImage.push()
@@ -36,14 +38,24 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                // Ensure the 'Kubernetes CLI' plugin is installed
+                // Requires 'Kubernetes CLI' plugin and 'k8s-creds' in Jenkins
                 withKubeConfig([credentialsId: 'k8s-creds']) {
-                    // Windows batch equivalent to update the image tag in the YAML
+                    // Updates the image tag in deployment.yaml using PowerShell
                     bat "powershell -Command \"(Get-Content k8s/deployment.yaml) -replace 'image:.*', 'image: ${DOCKER_IMAGE}:${DOCKER_TAG}' | Set-Content k8s/deployment.yaml\""
+                    
+                    // Applies changes to the cluster
                     bat "kubectl apply -f k8s/deployment.yaml"
                     bat "kubectl apply -f k8s/service.yaml"
                 }
             }
         }
     }
+
+    post {
+        always {
+            // Cleans up the workspace after the build finishes
+            cleanWs()
+        }
+    }
 }
+
